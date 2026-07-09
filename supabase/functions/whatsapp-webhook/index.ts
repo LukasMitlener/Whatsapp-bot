@@ -18,9 +18,10 @@ import {
   updateConversation,
   type Contact,
 } from "../_shared/db.ts";
-import { checkGuardrail, getClaudeReply } from "../_shared/claude.ts";
+import { checkGuardrail, getClaudeReply, type Interest } from "../_shared/claude.ts";
 import { sendText, sendTemplate, TEMPLATE_BY_LANGUAGE } from "../_shared/whatsapp.ts";
 import { getAskForTextMessage, getFallbackMessage, getOptOutConfirmation } from "../_shared/prompts.ts";
+import { isOptOutMessage } from "../_shared/optout.ts";
 
 // Threat model: "strop zpráv na konverzaci" — brání neomezenému pálení
 // Claude kreditů v jedné konverzaci (spam / smyčka).
@@ -156,7 +157,7 @@ async function handleInboundMessage(
   }
 
   // Opt-out gate — deterministicky, PŘED jakýmkoli voláním LLM.
-  if (/^stop\b/i.test(text)) {
+  if (isOptOutMessage(text)) {
     await updateContact(db, contact.id, { status: "opted_out", opted_out_at: new Date().toISOString() });
     await updateConversation(db, conversation.id, { state: "opted_out", outcome: "opted_out" });
     await sendAndLog(
@@ -224,16 +225,16 @@ async function handleInboundMessage(
 
   let replyText: string;
   let tokens: { input: number; output: number } | undefined;
-  let interested = false;
+  let interest: Interest = "neutral";
 
   try {
-    const claudeReply = await getClaudeReply(anthropicKey, contact.language, text);
+    const claudeReply = await getClaudeReply(anthropicKey, contact.language, contact.segment, contact.name, text);
     const guardrail = await checkGuardrail(anthropicKey, text, claudeReply.text);
     tokens = { input: claudeReply.inputTokens, output: claudeReply.outputTokens };
 
     if (guardrail.safe) {
       replyText = claudeReply.text;
-      interested = guardrail.interested;
+      interest = guardrail.interest;
     } else {
       console.warn("webhook: guardrail blocked reply —", guardrail.reason);
       replyText = getFallbackMessage(contact.language);
@@ -245,11 +246,16 @@ async function handleInboundMessage(
 
   await sendAndLog(db, contact, conversation.id, phoneNumberId, waToken, replyText, tokens);
 
-  // Rozpoznání zájmu → handoff (v prototypu = označení kontaktu/konverzace + log).
-  if (interested) {
+  // Rozpoznání zájmu/nezájmu → handoff, nebo slušné ukončení (v prototypu =
+  // označení kontaktu/konverzace + log, žádná zvláštní zpráva navíc —
+  // Claude odpověď už je zdvořilá a stručná dle system promptu).
+  if (interest === "interested") {
     console.log("webhook: zájem rozpoznán, handoff na poradce —", contact.phone);
     await updateContact(db, contact.id, { status: "interested" });
     await updateConversation(db, conversation.id, { state: "handed_off", outcome: "interested" });
+  } else if (interest === "not_interested") {
+    console.log("webhook: klient nemá zájem, ukončuji konverzaci —", contact.phone);
+    await updateConversation(db, conversation.id, { state: "closed", outcome: "not_interested" });
   } else {
     await updateConversation(db, conversation.id, { state: "active" });
   }

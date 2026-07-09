@@ -52,11 +52,13 @@ ne náhoda.
   sbírá. **Pro produkci** je potřeba WhatsApp-specifický opt-in (obecný
   marketingový souhlas ≠ WhatsApp opt-in dle Meta policy) + frequency
   capping.
-- Opt-out (`STOP`) se vyhodnocuje **deterministicky, regexem, před jakýmkoli
-  voláním LLM** — nejde o rozhodnutí modelu, aby ho nešlo obejít prompt
-  injection přes obsah zprávy. Nastaví `contacts.status = opted_out` +
-  `opted_out_at`, ukončí konverzaci (`conversations.state = opted_out`) a
-  pošle jedinou deterministickou potvrzovací zprávu — bez Claude volání.
+- Opt-out se vyhodnocuje **deterministicky, regexem, před jakýmkoli voláním
+  LLM** (`_shared/optout.ts`) — nejde o rozhodnutí modelu, aby ho nešlo
+  obejít prompt injection přes obsah zprávy. Rozpoznává `STOP`, „nemám
+  zájem", „odhlásit"/„odhlaste" i anglické `unsubscribe`/`not interested`.
+  Nastaví `contacts.status = opted_out` + `opted_out_at`, ukončí konverzaci
+  (`conversations.state = opted_out`) a pošle jedinou deterministickou
+  potvrzovací zprávu — bez Claude volání.
 - Jakmile je kontakt `opted_out`, žádná další cesta v kódu ho nepřepíše
   (viz `markContactErrorUnlessOptedOut` v `whatsapp-webhook/index.ts`) —
   technická chyba doručení nemá přednost před explicitním odhlášením.
@@ -110,14 +112,41 @@ okno smí jít jen schválená template. Webhook to počítá ze skutečného
 `message.timestamp` (kdy Meta zaznamenala zprávu klienta), ne z okamžiku
 zpracování — funguje správně i při zpožděné/backfillované doručence.
 
-## Rozpoznání zájmu a handoff
+## Personalizace
+
+Jazyk a segment jdou do system promptu jako **datové fakty**, ne jako
+samostatný pravidlový engine s větvenou logikou (`buildSystemPrompt` v
+`_shared/prompts.ts`):
+
+- **Jazyk** (`contact.language`) — řídí jazyk odpovědi i výběr template
+  (cs/en varianta).
+- **Segment** (`contact.segment`) — jemně ovlivňuje tón/míru detailu:
+  `retail` bez žargonu, `affluent` může zmínit diskrétní konzultaci,
+  `existing_client` krátce naváže na existující vztah. Fakta a compliance
+  pravidla se segmentem nemění, jen způsob podání.
+- **Oslovení:** vždy vykání ("Vy"/"Vám"), nikdy tykání — explicitní
+  pravidlo v system promptu, nezávislé na tom, jak píše klient.
+
+## Rozpoznání zájmu, nezájmu a handoff
 
 Guardrail (Claude Haiku) dostává při jednom volání dvojí úkol: safety-check
-odpovědi asistenta + klasifikaci, jestli **klient** projevil jasný zájem
-o předání poradci. Žádné druhé LLM volání navíc. Při `interested = true`:
-`contacts.status = interested`, `conversations.state = handed_off`. Handoff
-je v tomto prototypu **označení + log** — reálné směrování k poradci
-(e-mail/Slack notifikace) je přímé rozšíření, ne součást MVP.
+odpovědi asistenta + třístavovou klasifikaci **zprávy klienta**
+(`interested` / `not_interested` / `neutral`). Žádné druhé LLM volání navíc.
+
+- `interested` → `contacts.status = interested`, `conversations.state =
+  handed_off`. Handoff je v tomto prototypu **označení + log** — reálné
+  směrování k poradci (e-mail/Slack notifikace) je přímé rozšíření, ne
+  součást MVP.
+- `not_interested` → `conversations.state = closed`, `outcome =
+  not_interested`. Žádná zvláštní zpráva navíc — Claude odpověď je díky
+  system promptu už sama zdvořilá a stručná (splňuje "pokud zájem nemá,
+  slušně a krátce ukončit").
+- `neutral` (dotaz, nejasná odpověď) → konverzace pokračuje normálně
+  (`state = active`).
+
+Explicitní žádost o úplné odhlášení (STOP a synonyma) řeší samostatný
+deterministický opt-out gate výše, ne guardrail — má přednost před touhle
+klasifikací.
 
 ## Náklady
 
@@ -129,8 +158,10 @@ je v tomto prototypu **označení + log** — reálné směrování k poradci
   průměru na konverzaci. Guardrail běží na Haiku (levný model), hlavní
   odpověď na Sonnetu.
 - **Škálování:** náklad roste lineárně s (počet konverzací × zprávy na
-  konverzaci). Páky: kratší FAKTA blok, limit historie v promptu, strop
-  délky konverzace před handoffem (už implementováno — 40 zpráv).
+  konverzaci). Páky: kratší FAKTA blok, strop délky konverzace před
+  handoffem (už implementováno — 40 zpráv). Pozn.: prompt zatím neposílá
+  historii konverzace vůbec (viz Nápady na rozšíření níže) — až se přidá,
+  bude "limit délky historie" další páka.
 
 ## Co doladit pro produkci
 
@@ -158,6 +189,41 @@ je v tomto prototypu **označení + log** — reálné směrování k poradci
 - Sdílený Supabase projekt (více kodebází v jednom projektu) vyžadoval
   jednorázové sladění historie migrací — pro nový produkční projekt by
   bylo čistší mít dedikovaný Supabase projekt od začátku.
+- **Konverzační historie se do promptu vůbec neposílá** — `getClaudeReply`
+  dostává jen aktuální zprávu klienta, ne předchozí tahy stejné konverzace
+  (plán přitom s "krátkou historií" v nákladovém modelu počítal, viz sekce
+  8). V testování to nevadilo, protože STOP/zájem/nezájem jsou
+  kontextově nezávislé signály a systémový prompt je samostatný — ale
+  navazující dotaz typu "a jak to souvisí s tím, co jste psal předtím?"
+  by asistent nezvládl, protože si "nepamatuje" vlastní předchozí odpověď.
+  Zjištěno až při ručním testování, ne review — mělo to být pokryto dřív.
+
+## Nápady na rozšíření (mimo scope tohoto promptu)
+
+Věci, které dávají smysl jako další krok, ale záměrně nejsou v tomhle
+prototypu implementované:
+
+- **Konverzační historie v promptu** — poslat posledních N zpráv
+  konverzace (z `messages`) do `getClaudeReply` jako krátký kontext, aby
+  asistent zvládl navazující dotazy. Přímo souvisí s bodem výše.
+- **Google Calendar integrace** — při handoffu (`interest = "interested"`)
+  nabídnout klientovi konkrétní volné termíny konzultace (Calendar API),
+  po potvrzení automaticky založit event, a den před schůzkou poslat
+  WhatsApp připomínku (nová template kategorie UTILITY, ne MARKETING —
+  jednodušší schvalování). Vyžaduje novou tabulku/pole pro naplánovanou
+  schůzku a buď cron job, nebo Supabase scheduled function pro
+  den-předem připomínku.
+- **Skutečné směrování handoffu** (viz "Co doladit pro produkci" výše) —
+  Calendar integrace by ho částečně nahradila/doplnila: poradce by dostal
+  rovnou obsazený slot v kalendáři, ne jen DB flag k ručnímu dohledání.
+- **Kalibrace guardrail klasifikace** — sada testovacích zpráv (cs/en,
+  různé segmenty) s očekávaným `safe`/`interest` výstupem, spouštěná při
+  každé změně promptu, aby šlo číselně vidět, jestli úprava promptu
+  nezhoršila false positive/negative rate (dnes se to ověřuje ručně, viz
+  `scripts/debug-claude.sh`).
+- **Vícejazyčnost nad rámec cs/en** — `LANGUAGE_LABEL`/`TEMPLATE_BY_LANGUAGE`
+  jsou malé lookup mapy, přidání dalšího jazyka je otázka nového klíče +
+  nové schválené template, ne přepisu logiky.
 
 ## Spuštění
 

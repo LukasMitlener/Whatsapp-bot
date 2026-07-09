@@ -62,9 +62,11 @@ async function callMessages(
 export async function getClaudeReply(
   apiKey: string,
   language: string,
+  segment: string | null,
+  clientName: string | null,
   userMessage: string,
 ): Promise<ClaudeReply> {
-  const system = buildSystemPrompt(language, userMessage);
+  const system = buildSystemPrompt(language, segment, clientName, userMessage);
   const { text, inputTokens, outputTokens, stopReason } = await callMessages(
     apiKey,
     REPLY_MODEL,
@@ -78,12 +80,18 @@ export async function getClaudeReply(
   return { text: text.trim(), inputTokens, outputTokens };
 }
 
+export type Interest = "interested" | "not_interested" | "neutral";
+
 export interface GuardrailResult {
   safe: boolean;
   reason: string;
-  interested: boolean;
+  interest: Interest;
   inputTokens: number;
   outputTokens: number;
+}
+
+function parseInterest(value: unknown): Interest {
+  return value === "interested" || value === "not_interested" ? value : "neutral";
 }
 
 // Modely občas zabalí JSON do markdown code fence (```json ... ```) i přes
@@ -114,14 +122,14 @@ export async function checkGuardrail(
     return {
       safe: parsed.safe === true,
       reason: typeof parsed.reason === "string" ? parsed.reason : "",
-      interested: parsed.interested === true,
+      interest: parseInterest(parsed.interest),
       inputTokens,
       outputTokens,
     };
   } catch {
     // Fail-closed: nečitelná odpověď guardrailu (i truncated JSON kvůli
-    // stopReason === "max_tokens") = neber jako bezpečnou ani jako zájem.
+    // stopReason === "max_tokens") = neber jako bezpečnou ani jako signál zájmu.
     console.warn("guardrail: failed to parse JSON response, stopReason=", stopReason, "raw=", text);
-    return { safe: false, reason: "guardrail: unparsable response", interested: false, inputTokens, outputTokens };
+    return { safe: false, reason: "guardrail: unparsable response", interest: "neutral", inputTokens, outputTokens };
   }
 }
