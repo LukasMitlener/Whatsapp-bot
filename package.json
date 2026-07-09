@@ -1,0 +1,20 @@
+{
+  "name": "imperium-finance-whatsapp-outreach",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "import-contacts": "NODE_OPTIONS=--experimental-websocket tsx scripts/import-contacts.ts",
+    "outreach": "NODE_OPTIONS=--experimental-websocket tsx scripts/outreach.ts",
+    "stats": "NODE_OPTIONS=--experimental-websocket tsx scripts/stats.ts"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0",
+    "typescript": "^5.5.0",
+    "@types/node": "^22.0.0"
+  }
+}
