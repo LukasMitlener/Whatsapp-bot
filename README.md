@@ -10,20 +10,25 @@ rozšíření, dev skripty): [`ai_docs/technical-details.md`](ai_docs/technical-
 ## Stav odevzdání: custom template čeká na schválení Metou
 
 Custom úvodní template (`imperium_datacenters_intro_cs/en`, kategorie
-MARKETING) byl podán ke schválení, ale k datu odevzdání je stále `PENDING`
-— schvalovací fronta je čistě na straně Mety, nejde uspíšit ani odhadnout
-z API. Demo proto ukazuje dvě věci odděleně:
+MARKETING) byl podán ke schválení, ale k datu odevzdání (deadline 10. 7.)
+je stále `PENDING` — schvalovací fronta je čistě na straně Mety, nejde
+uspíšit ani odhadnout z API. Nespoléhám na to, že to den před deadline
+dojde — místo čekání jde demo cestou transparentnosti a je natočené
+(resp. naklikané živě na hovoru) ve dvou částech, které dohromady
+prokazují všechno:
 
-1. **Mechanismus business-initiated oslovení** (`scripts/outreach.ts`) —
-   rate-limit, logování, přechod statusů — reálně otestovaný proti
-   schválenému `hello_world` templatu jako náhradě za obsah.
-2. **Celá reálná konverzace** (LLM odpovědi, rozpoznání zájmu/nezájmu,
-   opt-out, handoff) — otestováno end-to-end na skutečných WhatsApp
-   číslech a nezávisí na schválení template, protože jde o odpovědi
-   v rámci 24h okna, ne o zahájení konverzace.
+1. **Mechanismus** — běh `scripts/outreach.ts`: rozeslání, rate-limit,
+   logování, přechod statusů. Přes `hello_world` template, protože tady
+   se dokazuje, že rozesílání funguje, ne obsah.
+2. **Reálný obsah a konverzace** — skutečná výměna přes WhatsApp: úvodní
+   text identický s čekající šablonou → dotaz → odpověď → zájem/handoff
+   → STOP. Tady se dokazuje, že bot vede smysluplnou konverzaci nad
+   reálnou nabídkou. Nezávisí na schválení template, protože jde
+   o odpovědi v rámci 24h okna, ne o zahájení konverzace.
 
-Jakmile Meta template schválí, `npm run outreach` pošle reálný obsah bez
-další úpravy kódu.
+Jediné, co chybí, je jeden proklik: až Meta šablonu schválí, `npm run
+outreach` pošle rovnou ji místo `hello_world` — nic dalšího se v kódu
+nemění. Mezera je tedy externí (Meta review), ne v řešení.
 
 ## Architektura a proč
 
