@@ -74,6 +74,13 @@ samotná WhatsApp konverzace.
   deterministickou potvrzovací zprávu bez Claude volání. Jakmile je
   kontakt `opted_out`, nic v kódu ho nepřepíše zpět (ani technická chyba
   doručení).
+- **Opt-out je záměrně konečný a nevratný automatem** — odhlášený kontakt
+  už nedostane žádnou odpověď, ani když napíše, že má znovu zájem. Je to
+  úmysl, ne omezení: reaktivace odhlášeného kontaktu musí být explicitní
+  krok (např. klíčové slovo `START`, nebo přes poradce), ne vedlejší efekt
+  další zprávy — jinak by šlo samotnou opt-out záruku obejít prostým
+  napsáním čehokoliv jiného. Znovupřihlašovací tok přes `START` je přímé
+  rozšíření, není v tomto prototypu implementované.
 - **Pro ostré nasazení by bylo potřeba:** WhatsApp-specifický opt-in tok
   (obecný marketingový souhlas ≠ WhatsApp opt-in) + frequency capping;
   trvalý System User token místo dočasného 24h tokenu (na tenhle rozdíl
