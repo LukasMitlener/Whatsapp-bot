@@ -110,11 +110,14 @@ samotná WhatsApp konverzace.
   jednorázové sladění historie migrací — pro nový produkční projekt by
   bylo čistší mít dedikovaný projekt od začátku.
 - **Úvodní template oslovuje křestním jménem** ("Dobrý den Jane"), zatímco
-  odpovědi bota v konverzaci oslovují příjmením ("pane Nováku") — v
-  češtině je u finanční nabídky od neznámého odesílatele správně oslovení
-  příjmením, ne křestním, takže je to nekonzistentní. Vědomé rozhodnutí,
-  ne přehlédnutí: podaná template visí v Metině schvalovací frontě těsně
-  před deadline a nová verze by frontu resetovala, takže ji neupravuju.
+  odpovědi bota uvnitř konverzace už oslovují příjmením ("pane Nováku") —
+  a to je ta správná volba pro produkci (u finanční nabídky od neznámého
+  odesílatele je v češtině formálnější oslovení příjmením na místě).
+  Template zůstala u křestního jména vědomě, ne přehlédnutím: oslovení je
+  součástí textu podané `imperium_datacenters_intro_cs`, kterou drží Meta,
+  ne kód bota, a k datu odevzdání je pořád `PENDING` — editace by
+  vyžadovala novou verzi a nové schvalovací kolo, a přepodání den před
+  deadline by frontu jen resetovalo bez záruky, že stihne schválení.
   Produkční řešení (rozdělit jméno na křestní/příjmení a v template
   parametru použít příjmení) i proč to není triviální je v
   `ai_docs/technical-details.md` (Nápady na rozšíření).
@@ -129,5 +132,9 @@ npx supabase functions deploy whatsapp-webhook --no-verify-jwt --use-api
 npm run outreach                   # rozešle úvodní template
 npm run stats                      # přehled výsledků + náklady
 ```
+
+`--use-api` bundluje funkci server-side (bez závislosti na lokálním
+Dockeru) — funguje i bez něj, pokud Docker máš; ponecháno kvůli
+přenositelnosti na stroj bez Dockeru.
 
 Detailní checklist pro Meta setup: [`ai_docs/meta-whatsapp-setup.md`](ai_docs/meta-whatsapp-setup.md).
