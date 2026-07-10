@@ -124,6 +124,27 @@ klasifikací.
 
 ## Nápady na rozšíření (mimo scope tohoto zadání)
 
+- **Rozdělit jméno kontaktu na křestní/příjmení.** Dnes je `contacts.name`
+  jedno pole s celým jménem (`"Jan Novák"`) — do system promptu jde vcelku
+  (`buildSystemPrompt` v `_shared/prompts.ts:66`, `JMÉNO KLIENTA:
+  ${nameLine}`), a to, že Claude v konverzaci osloví příjmením ("pane
+  Nováku"), je jeho vlastní odvození z konvence, ne explicitní pravidlo v
+  promptu. Úvodní WhatsApp template ale oslovuje parametrem `{{1}}`
+  natvrdo vyplněným křestním jménem — odděleně od promptu, takže
+  nekonzistentně. Produkční řešení: `first_name`/`last_name` jako
+  samostatná pole a template parametr = příjmení. Není to triviální kvůli
+  dvěma věcem:
+  - **České skloňování oslovení (5. pád)** — "Novák" → "Nováku", "Svoboda"
+    → "Svobodo", "Němec" → "Němče"; pravidlo skloňování nejde odvodit
+    jednoduchým algoritmem pro všechna česká příjmení, potřeboval by se
+    buď morfologický nástroj/knihovna, nebo LLM volání navíc jen na
+    generování 5. pádu (další náklad na kontakt).
+  - **Odvození rodu/skloňovaného tvaru není spolehlivé u všech jmen** —
+    stejný problém jako u gender-aware oslovování v konverzaci (viz
+    `buildSystemPrompt`, pravidlo o pohlaví klienta): cizí, neobvyklá nebo
+    rodově nejednoznačná jména (např. přechýlení u cizinek, jednoslovná
+    jména) skloňování/rod neurčí spolehlivě ani člověk bez kontextu, natož
+    pravidlový algoritmus.
 - **Konverzační historie v promptu** — poslat posledních N zpráv
   konverzace (z `messages`) do `getClaudeReply` jako krátký kontext, aby
   asistent zvládl navazující dotazy (dnes vidí jen aktuální zprávu).

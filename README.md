@@ -109,6 +109,15 @@ samotná WhatsApp konverzace.
 - Sdílený Supabase projekt (více kodebází pohromadě) vyžadoval
   jednorázové sladění historie migrací — pro nový produkční projekt by
   bylo čistší mít dedikovaný projekt od začátku.
+- **Úvodní template oslovuje křestním jménem** ("Dobrý den Jane"), zatímco
+  odpovědi bota v konverzaci oslovují příjmením ("pane Nováku") — v
+  češtině je u finanční nabídky od neznámého odesílatele správně oslovení
+  příjmením, ne křestním, takže je to nekonzistentní. Vědomé rozhodnutí,
+  ne přehlédnutí: podaná template visí v Metině schvalovací frontě těsně
+  před deadline a nová verze by frontu resetovala, takže ji neupravuju.
+  Produkční řešení (rozdělit jméno na křestní/příjmení a v template
+  parametru použít příjmení) i proč to není triviální je v
+  `ai_docs/technical-details.md` (Nápady na rozšíření).
 
 ## Spuštění
 

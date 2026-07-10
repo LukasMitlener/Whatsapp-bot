@@ -156,6 +156,16 @@ async function handleInboundMessage(
     return;
   }
 
+  // Kontakt už dřív opted_out — zpráva se zaloguje (výše), ale žádná
+  // další odpověď nejde ven, ať zpráva obsahuje cokoliv (i "mám zájem").
+  // Bez týhle kontroly by opt-out gate níže chytil jen zprávy, které SAMY
+  // obsahují opt-out frázi — ne libovolnou další zprávu od už odhlášeného
+  // kontaktu, což je přesně to, co má "odhlášení" garantovat.
+  if (contact.status === "opted_out") {
+    console.log("webhook: zpráva od již opted_out kontaktu, žádná odpověď —", contact.phone);
+    return;
+  }
+
   // Opt-out gate — deterministicky, PŘED jakýmkoli voláním LLM.
   if (isOptOutMessage(text)) {
     await updateContact(db, contact.id, { status: "opted_out", opted_out_at: new Date().toISOString() });
